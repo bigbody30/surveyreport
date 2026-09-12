@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>รายงานเยี่ยมร้านค้าเทียบแผน</title>
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div>
+      <h1>รายงานเยี่ยมร้านค้าเทียบแผน</h1>
+      <div class="sub">อัปโหลดไฟล์แผนเยี่ยม + ไฟล์เยี่ยมร้านค้าจริง เพื่อสรุปว่าร้านไหนเยี่ยมแล้ว ยังไม่เยี่ยม หรือเยี่ยมนอกแผน</div>
+    </div>
+    <div id="connStatus" class="status-chip">กำลังตรวจสอบการเชื่อมต่อ Supabase...</div>
+  </header>
+
+  <!-- STEP 1+2: Upload -->
+  <section class="section">
+    <div class="section-title">
+      <span class="num">1</span><h2>อัปโหลดไฟล์ 2 ไฟล์</h2>
+      <span class="hint">— แผนเยี่ยม (CallPlanData) และ รายงานเยี่ยมร้านค้าจริง</span>
+    </div>
+    <hr class="rule" />
+
+    <div class="dropzone-row">
+      <label class="dropzone" id="dz-plan">
+        <input type="file" id="file-plan" accept=".xlsx,.xls" />
+        <div class="label">📋 ไฟล์แผนเยี่ยม</div>
+        <div class="desc">ไฟล์ Excel ชีท CallPlanData ที่มีคอลัมน์รหัสร้านค้า และวันที่เข้าเยี่ยม</div>
+        <div class="filename" id="fn-plan"></div>
+      </label>
+
+      <label class="dropzone" id="dz-actual">
+        <input type="file" id="file-actual" accept=".xlsx,.xls" />
+        <div class="label">✅ ไฟล์เยี่ยมร้านค้าจริง</div>
+        <div class="desc">ไฟล์ Excel รายงานการเยี่ยมร้านค้า ที่มีคอลัมน์วันที่เข้าเยี่ยม และในแผน/นอกแผน</div>
+        <div class="filename" id="fn-actual"></div>
+      </label>
+    </div>
+
+    <div style="margin-top:20px;">
+      <button class="btn gold" id="btn-process" disabled>ประมวลผลและบันทึกลง Supabase</button>
+    </div>
+    <div class="log" id="log"></div>
+  </section>
+
+  <!-- RESULTS -->
+  <section class="section" id="results-section" style="display:none;">
+    <div class="section-title">
+      <span class="num">2</span><h2>ผลสรุป</h2>
+      <span class="hint" id="period-hint"></span>
+    </div>
+    <hr class="rule" />
+
+    <div class="stat-row">
+      <div class="stat visited">
+        <div class="n" id="stat-visited">0</div>
+        <div class="l">ร้านที่มีแผน + เยี่ยมแล้วตรงวันที่แผน</div>
+      </div>
+      <div class="stat notvisited">
+        <div class="n" id="stat-notvisited">0</div>
+        <div class="l">ร้านที่มีแผน + ยังไม่ได้เยี่ยม (ตามวันที่แผนกำหนด)</div>
+      </div>
+      <div class="stat offplan">
+        <div class="n" id="stat-offplan">0</div>
+        <div class="l">ครั้งที่ไปเยี่ยม แต่ไม่มีแผน/ผิดวันที่แผน</div>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;">
+      <button class="btn" id="btn-download">⬇ ดาวน์โหลดรายงาน Excel</button>
+    </div>
+
+    <div style="margin-top:28px;">
+      <div class="tabs">
+        <div class="tab active" data-tab="visited">เยี่ยมตามแผน</div>
+        <div class="tab" data-tab="notvisited">ยังไม่เยี่ยม</div>
+        <div class="tab" data-tab="offplan">นอกแผน</div>
+      </div>
+      <div class="table-wrap" id="table-container"></div>
+    </div>
+  </section>
+
+  <!-- HISTORY -->
+  <section class="section">
+    <div class="section-title">
+      <span class="num">3</span><h2>ประวัติการอัปโหลด</h2>
+      <span class="hint">— กดเพื่อดึงข้อมูลจาก Supabase มาสรุปและดาวน์โหลดซ้ำ</span>
+    </div>
+    <hr class="rule" />
+    <div id="history-list">
+      <div class="empty-note">ยังไม่มีประวัติ หรือกำลังโหลด...</div>
+    </div>
+  </section>
+
+  <div class="footer-note">
+    ข้อมูลร้านค้า/แผนเยี่ยม/การเยี่ยมจริงถูกบันทึกลงในฐานข้อมูล Supabase ของคุณเอง (ตาราง upload_batches, visit_plans, actual_visits)
+    การเทียบแผนใช้คู่ <strong>รหัสร้านค้า + วันที่เข้าเยี่ยม</strong> ต้องตรงกันเป๊ะจึงนับว่า "เยี่ยมตามแผน"
+    ถ้าไปเยี่ยมร้านที่มีแผน แต่คนละวันที่ จะถูกนับทั้ง 2 ฝั่ง คือ "ยังไม่เยี่ยม" (สำหรับวันที่แผนกำหนด) และ "นอกแผน" (สำหรับวันที่ไปจริง)
+  </div>
+
+</div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
